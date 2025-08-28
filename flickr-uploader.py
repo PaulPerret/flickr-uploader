@@ -4,8 +4,8 @@ import argparse
 import time
 
 # Flickr API keys (replace with yours from https://www.flickr.com/services/apps/create/)
-API_KEY = "c493447f40149f72909e969c968f897e"
-API_SECRET = "fa4677c1c8c8ceed"
+API_KEY = ""
+API_SECRET = ""
 
 # Name of the token cache file
 TOKEN_CACHE_FILE = "flickr_token"
@@ -80,8 +80,8 @@ def upload_directory(root_path, start_album, end_album, dry_run=False):
             if start_album <= os.path.basename(dirpath) <= end_album:
                 no_develops.append(dirpath)
 
-    # Sort candidate dirs in reverse alphabetical order by basename
-    candidate_dirs.sort(key=lambda x: os.path.basename(x[0]), reverse=True)
+    # Sort candidate dirs in alphabetical order by basename
+    candidate_dirs.sort(key=lambda x: os.path.basename(x[0]), reverse=False)
 
     if not candidate_dirs:
         print("No albums found in the specified range.")
@@ -109,7 +109,7 @@ def upload_directory(root_path, start_album, end_album, dry_run=False):
 
         # Sort photos by filename
         files = sorted(
-            [f for f in os.listdir(develop_path) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
+            [f for f in os.listdir(develop_path) if f.lower().endswith((".jpg", ".jpeg"))]
         )
 
         photo_ids = []
@@ -130,7 +130,7 @@ def upload_directory(root_path, start_album, end_album, dry_run=False):
                 album_id = get_or_create_album(album_name, photo_ids[0])
                 for pid in photo_ids[1:]:
                     flickr.photosets.addPhoto(format='parsed-json', photoset_id=album_id, photo_id=pid)
-                    print(f"Added photo {pid} to album {album_name}")
+                    #print(f"Added photo {pid} to album {album_name}")
                 print(f"Finished uploading {len(photo_ids)} photos to album: {album_name}")
 
     # Print log of missing directories (works in dry-run too)

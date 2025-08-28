@@ -3,8 +3,8 @@ import re
 import argparse
 
 # Replace with your API key/secret
-API_KEY = "c493447f40149f72909e969c968f897e"
-API_SECRET = "fa4677c1c8c8ceed"
+API_KEY = ""
+API_SECRET = ""
 
 # Authenticate
 flickr = flickrapi.FlickrAPI(API_KEY, API_SECRET, format="parsed-json")

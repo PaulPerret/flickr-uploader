@@ -2,8 +2,8 @@ import requests
 from requests_oauthlib import OAuth1
 
 # Replace with your keys/tokens
-API_KEY = "c493447f40149f72909e969c968f897e"
-API_SECRET = "fa4677c1c8c8ceed"
+API_KEY = ""
+API_SECRET = ""
 oauth = OAuth1(API_KEY, API_SECRET)
 
 filepath = r"F:\My Pictures\20050117_Florida\Develops\CRW_1641.jpg"

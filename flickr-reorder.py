@@ -4,8 +4,8 @@ import json
 import time
 import os
 
-API_KEY = "c493447f40149f72909e969c968f897e"
-API_SECRET = "fa4677c1c8c8ceed"
+API_KEY = ""
+API_SECRET = ""
 
 def get_albums(flickr, prefix):
     """Fetch all albums starting with the given prefix."""
@@ -90,7 +90,7 @@ def process_albums(flickr, albums, dry_run=False):
             primary_photo_id=photos[0],
             format="json", nojsoncallback=1
         )
-        
+
         # Decode JSON string into dict
         if isinstance(rsp, bytes):
             rsp = rsp.decode("utf-8")
