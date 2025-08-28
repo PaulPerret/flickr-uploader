@@ -99,14 +99,28 @@ def process_albums(flickr, albums, dry_run=False):
 
         new_album_id = rsp["photoset"]["id"]
 
+        # # Add remaining photos
+        # if len(photos) > 1:
+        #     flickr.photosets.addPhotos(
+        #         photoset_id=new_album_id,
+        #         photo_ids=",".join(photos[1:]),
+        #         format="json", nojsoncallback=1
+        #     )
+        # time.sleep(1)
+        
+        
         # Add remaining photos
-        if len(photos) > 1:
-            flickr.photosets.addPhotos(
-                photoset_id=new_album_id,
-                photo_ids=",".join(photos[1:]),
-                format="json", nojsoncallback=1
-            )
-        time.sleep(1)
+        for pid in photos[1:]:
+            try:
+                flickr.photosets.addPhoto(
+                    photoset_id=new_album_id,
+                    photo_id=pid,
+                    format="json", nojsoncallback=1
+                )
+                time.sleep(0.2)  # be gentle with API rate limits
+            except Exception as e:
+                print(f"  [ERROR] Could not add photo {pid} to album {album['title']}: {e}")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Reorder Flickr albums alphabetically.")
