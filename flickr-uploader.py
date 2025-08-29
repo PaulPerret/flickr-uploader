@@ -4,8 +4,8 @@ import argparse
 import time
 
 # Flickr API keys (replace with yours from https://www.flickr.com/services/apps/create/)
-API_KEY = "c493447f40149f72909e969c968f897e"
-API_SECRET = "fa4677c1c8c8ceed"
+API_KEY = ""
+API_SECRET = ""
 
 # Name of the token cache file
 TOKEN_CACHE_FILE = "flickr_token"

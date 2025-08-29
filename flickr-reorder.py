@@ -70,6 +70,7 @@ def backup_albums(flickr, albums, backup_file):
 def process_albums(flickr, albums, dry_run=False):
     """Delete, recreate, and re-add photos to albums in alphabetical order."""
     for idx, album in enumerate(albums, start=1):
+        start_time = time.time()
         photos = get_album_photos(flickr, album["id"])
         print(f"[{idx}/{len(albums)}] Album: '{album['title']}', Photos: {len(photos)}")
 
@@ -79,6 +80,7 @@ def process_albums(flickr, albums, dry_run=False):
         # Delete old album
         flickr.photosets.delete(photoset_id=album["id"])
         time.sleep(1)
+        print(f"  Deleted old album... ", end="", flush=True)
 
         # Recreate album (needs a primary photo ID)
         if not photos:
@@ -98,18 +100,10 @@ def process_albums(flickr, albums, dry_run=False):
             rsp = json.loads(rsp)
 
         new_album_id = rsp["photoset"]["id"]
-
-        # # Add remaining photos
-        # if len(photos) > 1:
-        #     flickr.photosets.addPhotos(
-        #         photoset_id=new_album_id,
-        #         photo_ids=",".join(photos[1:]),
-        #         format="json", nojsoncallback=1
-        #     )
-        # time.sleep(1)
-        
+        print(f"Created new one... ", end="", flush=True)      
         
         # Add remaining photos
+        print(f"Re-adding photos... ", end="", flush=True)      
         for pid in photos[1:]:
             try:
                 flickr.photosets.addPhoto(
@@ -120,7 +114,8 @@ def process_albums(flickr, albums, dry_run=False):
                 time.sleep(0.2)  # be gentle with API rate limits
             except Exception as e:
                 print(f"  [ERROR] Could not add photo {pid} to album {album['title']}: {e}")
-
+        end_time = time.time()
+        print(f"Done. ({round(end_time - start_time, 1)}s)")
 
 def main():
     parser = argparse.ArgumentParser(description="Reorder Flickr albums alphabetically.")
