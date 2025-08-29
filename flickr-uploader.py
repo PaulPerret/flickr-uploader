@@ -9,6 +9,7 @@ API_SECRET = ""
 
 # Name of the token cache file
 TOKEN_CACHE_FILE = "flickr_token"
+DEVELOPS_NAMES = ["LR Export", "LR Develops", "Develops", "converted"]
 
 # Single global client; use JSON for normal API calls
 flickr = flickrapi.FlickrAPI(API_KEY, API_SECRET, format='etree', cache=True)
@@ -63,83 +64,115 @@ def upload_photo(filepath, title, retries=3, backoff=2):
             else:
                 raise last_err
 
-def upload_directory(root_path, start_album, end_album, dry_run=False):
-    candidate_dirs = []
+def which_subdir(parent_dir):
+    for develops_dir in DEVELOPS_NAMES:
+        target_path = os.path.join(parent_dir, develops_dir)
+        if os.path.isdir(target_path):
+            return develops_dir
+    return False
+
+def upload_albums(root_path, start_album, end_album, dry_run=False):
+    develops = {}
     no_develops = []
 
-    # Collect all directories with/without a develops folder
-    for dirpath, dirnames, filenames in os.walk(root_path):
-        if develops_folder_name in dirnames:
-            album_name = os.path.basename(dirpath)
-            if start_album <= album_name <= end_album:
-                develop_path = os.path.join(dirpath, develops_folder_name)
-                # Count photos for preview
-                num_photos = len([f for f in os.listdir(develop_path) if f.lower().endswith((".jpg", ".jpeg", ".png"))])
-                candidate_dirs.append((dirpath, num_photos))
+    # Start at root_path
+    all_dirs = sorted([d for d in os.listdir(root_path) if os.path.isdir(os.path.join(root_path, d))])
+
+    # Get all directories that are between start_album and end_album
+    dirs_in_range = [d for d in all_dirs if start_album <= d <= end_album]
+    print("All directories in range:")
+    for d in dirs_in_range:
+        print(f"  {d}")
+
+    # For each of those, check if it has a develops subdirectory
+    for album in dirs_in_range:
+        album_path = os.path.join(root_path, album)
+        subdir_name = which_subdir(album_path)
+        
+        # If it does, add it to the develops list
+        if subdir_name:
+            develops[album_path] = subdir_name
+            
+        # If not, add it to the no-develops list
         else:
-            if start_album <= os.path.basename(dirpath) <= end_album:
-                no_develops.append(dirpath)
+            no_develops.append(album_path)
 
-    # Sort candidate dirs in alphabetical order by basename
-    candidate_dirs.sort(key=lambda x: os.path.basename(x[0]), reverse=False)
+    # Print out each list
+    print("\nAlbums with develops:")
+    for d in develops:
+        print(f"  {d}\\{develops[d]}")
+    print("\nAlbums without develops:")
+    for d in no_develops:
+        print(f"  {d}")
 
-    if not candidate_dirs:
-        print("No albums found in the specified range.")
+    # Prompt asking if want to upload no_develops list
+    choice = input("\nUpload albums without develops too? (y/N): ").strip().lower()
+    upload_no_develops = (choice == "y")
+
+    # For each in develops list, upload
+    for d in develops:
+        print(f"[UPLOAD] Uploading album with develops: {d}")
+        # TODO: call upload logic here with directory and develops subdir
+        upload_directory(d, subdir_name=develops[d], dry_run=dry_run)
+
+    # If want to upload no_develops
+    for d in no_develops:
+        print(f"[UPLOAD] Uploading album without develops: {d}")
+        upload_directory(d, dry_run=dry_run)
+
+
+def upload_directory(dirpath, subdir_name=False, dry_run=True):
+    print(f"Uploading {dirpath} with subdir {subdir_name}")
+    album_name = os.path.basename(dirpath)
+    albums = flickr.photosets.getList(format='parsed-json')['photosets']['photoset']
+    if any(album['title']['_content'] == album_name for album in albums):
+        print(f"Skipping {album_name}, album already exists on Flickr.")
         return
 
-    # Print albums to be uploaded with photo counts for confirmation
-    print("The following albums will be uploaded:")
-    for dirpath, num_photos in candidate_dirs:
-        print(f" - {os.path.basename(dirpath)} ({num_photos} photos)")
+    if (subdir_name):
+        dirpath = os.path.join(dirpath, subdir_name)
 
-    confirm = input("Proceed with upload? (y/n): ").strip().lower()
-    if confirm != 'y':
-        print("Upload canceled by user.")
-        return
+    print(f"Directory to upload: {dirpath}")
+    # Sort photos by filename
+    files = sorted(
+        [f for f in os.listdir(dirpath) if f.lower().endswith((".jpg", ".jpeg"))]
+    )
 
-    # Process directories
-    for dirpath, _ in candidate_dirs:
-        album_name = os.path.basename(dirpath)
-        albums = flickr.photosets.getList(format='parsed-json')['photosets']['photoset']
-        if any(album['title']['_content'] == album_name for album in albums):
-            print(f"Skipping {album_name}, album already exists on Flickr.")
-            continue
-
-        develop_path = os.path.join(dirpath, develops_folder_name)
-
-        # Sort photos by filename
-        files = sorted(
-            [f for f in os.listdir(develop_path) if f.lower().endswith((".jpg", ".jpeg"))]
-        )
-
-        photo_ids = []
-        for file in files:
-            filepath = os.path.join(develop_path, file)
-            if dry_run:
-                print(f"[Dry-run] Would upload photo: {filepath}")
-                photo_id = f"dryrun_{file}"  # placeholder
-            else:
-                print(f"Uploading {filepath}")
-                photo_id = upload_photo(filepath, file)
-            photo_ids.append(photo_id)
-
-        if photo_ids:
-            if dry_run:
-                print(f"[Dry-run] Would create album '{album_name}' and add {len(photo_ids)} photos")
-            else:
-                album_id = get_or_create_album(album_name, photo_ids[0])
-                for pid in photo_ids[1:]:
-                    flickr.photosets.addPhoto(format='parsed-json', photoset_id=album_id, photo_id=pid)
-                    #print(f"Added photo {pid} to album {album_name}")
-                print(f"Finished uploading {len(photo_ids)} photos to album: {album_name}")
-
-    # Print log of missing directories (works in dry-run too)
-    print(f"\nChecking for directories without '{develops_folder_name}' subfolder:")
-    if no_develops:
-        for d in no_develops:
-            print(f" - {d}")
+    if not files:
+        print(f"No photos found in {dirpath}")
     else:
-        print("All directories had the subfolder.")
+        first_file = files[0]
+        filepath = os.path.join(dirpath, first_file)
+
+        if dry_run:
+            print(f"[Dry-run] Would upload first photo: {filepath}")
+            first_photo_id = f"dryrun_{first_file}"
+            print(f"[Dry-run] Would create album '{album_name}' with first photo")
+            album_id = f"dryrun_album_{album_name}"
+        else:
+            print(f"{first_file}, ", end="", flush=True)
+            first_photo_id = upload_photo(filepath, first_file)
+            album_id = get_or_create_album(album_name, first_photo_id)
+
+        # Now upload the rest and add them to the album as we go
+        for file in files[1:]:
+            filepath = os.path.join(dirpath, file)
+            if dry_run:
+                print(f"[Dry-run] Would upload photo: {filepath} and add to album '{album_name}'")
+            else:
+                print(f"{file}, ", end="", flush=True)
+                photo_id = upload_photo(filepath, file)
+                try:
+                    flickr.photosets.addPhoto(
+                        format="parsed-json", photoset_id=album_id, photo_id=photo_id
+                    )
+                except Exception as e:
+                    # Ignore if photo already exists in album
+                    if "Photo already in set" not in str(e):
+                        print(f"Error adding {file} to album: {e}")
+
+        print(f"Finished uploading {len(files)} photos to album: {album_name}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Upload LR Export photos to Flickr.")
@@ -147,10 +180,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     root_folder = "F:\\My Pictures"
-    develops_folder_name = "Develops"
     start_album = input("Enter starting album name: ").strip()
     end_album = input("Enter ending album name: ").strip()
-    authenticate_write()
-    user = flickr.test.login(format='parsed-json')
-    print("Authenticated as:", user['user']['username']['_content'])
-    upload_directory(root_folder, start_album, end_album, dry_run=args.dry_run)
+    
+    if not(start_album) or not(end_album):
+        print("Start or End album missing")
+    else:
+        authenticate_write()
+        user = flickr.test.login(format='parsed-json')
+        print("Authenticated as:", user['user']['username']['_content'])
+        #upload_directory(root_folder, start_album, end_album, dry_run=args.dry_run)
+        upload_albums(root_folder, start_album, end_album, dry_run=args.dry_run)
+

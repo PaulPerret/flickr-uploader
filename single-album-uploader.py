@@ -45,7 +45,7 @@ def upload_directory(flickr, directory, album_title=None):
         if not file.lower().endswith(('.jpg', '.jpeg', '.png')):
             continue
 
-        print(f"{file}...", end='', flush=True)
+        print(f"{file}, ", end='', flush=True)
         rsp = flickr.upload(filename=filepath, title=file)
         photo_id = rsp.find('photoid').text
         uploaded_photo_ids.append(photo_id)
@@ -60,7 +60,7 @@ def upload_directory(flickr, directory, album_title=None):
     # Add remaining photos to album
     for pid in uploaded_photo_ids[1:]:
         flickr.photosets.addPhoto(photoset_id=album_id, photo_id=pid)
-    print(f"Added photos to album {album_name}")
+    print(f"\nAdded photos to album {album_name}")
 
 def main():
     parser = argparse.ArgumentParser(description="Upload a directory of photos to Flickr.")
