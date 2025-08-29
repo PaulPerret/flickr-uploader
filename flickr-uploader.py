@@ -4,8 +4,8 @@ import argparse
 import time
 
 # Flickr API keys (replace with yours from https://www.flickr.com/services/apps/create/)
-API_KEY = ""
-API_SECRET = ""
+API_KEY = "c493447f40149f72909e969c968f897e"
+API_SECRET = "fa4677c1c8c8ceed"
 
 # Name of the token cache file
 TOKEN_CACHE_FILE = "flickr_token"
@@ -49,7 +49,7 @@ def upload_photo(filepath, title, retries=3, backoff=2):
     last_err = None
     for attempt in range(1, retries + 1):
         try:
-            rsp = flickr.upload(filename=filepath, title=title)
+            rsp = flickr.upload(filename=filepath, title=title, is_public=0, is_friend=0, is_family=0)
             # rsp is an Element (XML). Extract <photoid>
             pid_el = rsp.find('photoid')
             if pid_el is None or not pid_el.text:
@@ -111,28 +111,26 @@ def upload_albums(root_path, start_album, end_album, dry_run=False):
 
     # For each in develops list, upload
     for d in develops:
-        print(f"[UPLOAD] Uploading album with develops: {d}")
-        # TODO: call upload logic here with directory and develops subdir
+        #print(f"Starting album with develops: {d}")
         upload_directory(d, subdir_name=develops[d], dry_run=dry_run)
 
     # If want to upload no_develops
     for d in no_develops:
-        print(f"[UPLOAD] Uploading album without develops: {d}")
+        #print(f"Starting album without develops: {d}")
         upload_directory(d, dry_run=dry_run)
 
 
-def upload_directory(dirpath, subdir_name=False, dry_run=True):
-    print(f"Uploading {dirpath} with subdir {subdir_name}")
+def upload_directory(dirpath, subdir_name=False, dry_run=True, skip_if_album_exists=True):
+    print(f"\nWorking on {dirpath}, subdir: {subdir_name}")
     album_name = os.path.basename(dirpath)
     albums = flickr.photosets.getList(format='parsed-json')['photosets']['photoset']
-    if any(album['title']['_content'] == album_name for album in albums):
+    if skip_if_album_exists and any(album['title']['_content'] == album_name for album in albums):
         print(f"Skipping {album_name}, album already exists on Flickr.")
         return
 
     if (subdir_name):
         dirpath = os.path.join(dirpath, subdir_name)
 
-    print(f"Directory to upload: {dirpath}")
     # Sort photos by filename
     files = sorted(
         [f for f in os.listdir(dirpath) if f.lower().endswith((".jpg", ".jpeg"))]
@@ -141,6 +139,7 @@ def upload_directory(dirpath, subdir_name=False, dry_run=True):
     if not files:
         print(f"No photos found in {dirpath}")
     else:
+        print(f"Uploading {len(files)} files from: {dirpath}")
         first_file = files[0]
         filepath = os.path.join(dirpath, first_file)
 
@@ -150,7 +149,7 @@ def upload_directory(dirpath, subdir_name=False, dry_run=True):
             print(f"[Dry-run] Would create album '{album_name}' with first photo")
             album_id = f"dryrun_album_{album_name}"
         else:
-            print(f"{first_file}, ", end="", flush=True)
+            print(f"Uploading first file {first_file}")
             first_photo_id = upload_photo(filepath, first_file)
             album_id = get_or_create_album(album_name, first_photo_id)
 
@@ -171,7 +170,7 @@ def upload_directory(dirpath, subdir_name=False, dry_run=True):
                     if "Photo already in set" not in str(e):
                         print(f"Error adding {file} to album: {e}")
 
-        print(f"Finished uploading {len(files)} photos to album: {album_name}")
+        print(f"\nAdded {len(files)} photos to album: {album_name}")
 
 
 if __name__ == "__main__":
@@ -191,4 +190,5 @@ if __name__ == "__main__":
         print("Authenticated as:", user['user']['username']['_content'])
         #upload_directory(root_folder, start_album, end_album, dry_run=args.dry_run)
         upload_albums(root_folder, start_album, end_album, dry_run=args.dry_run)
+        print(f"\nCompleted from {start_album} to {end_album}.")
 
