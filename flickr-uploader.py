@@ -4,8 +4,8 @@ import argparse
 import time
 
 # Flickr API keys (replace with yours from https://www.flickr.com/services/apps/create/)
-API_KEY = ""
-API_SECRET = ""
+API_KEY = "c493447f40149f72909e969c968f897e"
+API_SECRET = "fa4677c1c8c8ceed"
 
 # Name of the token cache file
 TOKEN_CACHE_FILE = "flickr_token"
@@ -23,9 +23,20 @@ def authenticate_write():
         verifier = input("Enter the verifier code: ")
         flickr.get_access_token(verifier)
 
+def get_all_albums():
+    albums = []
+    page = 1
+    while True:
+        rsp = flickr.photosets.getList(format='parsed-json', per_page=500, page=page)
+        albums.extend(rsp['photosets']['photoset'])
+        if page >= rsp['photosets']['pages']:
+            break
+        page += 1
+    return albums
+
 def get_or_create_album(title, primary_photo_id=None):
     """Find an album by title or create it if it doesn't exist."""
-    albums = flickr.photosets.getList(format='parsed-json')['photosets']['photoset']
+    albums = get_all_albums()
     for album in albums:
         if album['title']['_content'] == title:
             return album['id']
@@ -96,7 +107,7 @@ def upload_albums(root_path, start_album, end_album, dry_run=False):
         # If not, add it to the no-develops list
         else:
             no_develops.append(album_path)
-
+    
     # Print out each list
     print("\nAlbums with develops:")
     for d in develops:
@@ -105,6 +116,10 @@ def upload_albums(root_path, start_album, end_album, dry_run=False):
     for d in no_develops:
         print(f"  {d}")
 
+    # Get the list of albums on flickr
+    flickr_albums = get_all_albums()
+    print(f"flickr_albums size: {len(flickr_albums)}")
+    
     # Prompt asking if want to upload no_develops list
     choice = input("\nUpload albums without develops too? (y/N): ").strip().lower()
     upload_no_develops = (choice == "y")
@@ -112,19 +127,18 @@ def upload_albums(root_path, start_album, end_album, dry_run=False):
     # For each in develops list, upload
     for d in develops:
         #print(f"Starting album with develops: {d}")
-        upload_directory(d, subdir_name=develops[d], dry_run=dry_run)
+        upload_directory(d, flickr_albums, subdir_name=develops[d], dry_run=dry_run)
 
     # If want to upload no_develops
     for d in no_develops:
         #print(f"Starting album without develops: {d}")
-        upload_directory(d, dry_run=dry_run)
+        upload_directory(d, flickr_albums, dry_run=dry_run)
 
-
-def upload_directory(dirpath, subdir_name=False, dry_run=True, skip_if_album_exists=True):
+ # TODO: Change get_or_create_album to just create. If we're uploading, it shouldn't be there yet.
+def upload_directory(dirpath, flickr_albums, subdir_name=False, dry_run=True, skip_if_album_exists=True):
     print(f"\nWorking on {dirpath}, subdir: {subdir_name}")
     album_name = os.path.basename(dirpath)
-    albums = flickr.photosets.getList(format='parsed-json')['photosets']['photoset']
-    if skip_if_album_exists and any(album['title']['_content'] == album_name for album in albums):
+    if skip_if_album_exists and any(album['title']['_content'] == album_name for album in flickr_albums):
         print(f"Skipping {album_name}, album already exists on Flickr.")
         return
 
@@ -175,20 +189,21 @@ def upload_directory(dirpath, subdir_name=False, dry_run=True, skip_if_album_exi
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Upload LR Export photos to Flickr.")
+    parser.add_argument("start_album", help="Starting directory prefix")
+    parser.add_argument("end_album", help="Ending directory prefix")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be uploaded without touching Flickr")
     args = parser.parse_args()
 
     root_folder = "F:\\My Pictures"
-    start_album = input("Enter starting album name: ").strip()
-    end_album = input("Enter ending album name: ").strip()
-    
+    start_album = args.start_album
+    end_album = args.end_album
+
     if not(start_album) or not(end_album):
         print("Start or End album missing")
     else:
         authenticate_write()
         user = flickr.test.login(format='parsed-json')
         print("Authenticated as:", user['user']['username']['_content'])
-        #upload_directory(root_folder, start_album, end_album, dry_run=args.dry_run)
         upload_albums(root_folder, start_album, end_album, dry_run=args.dry_run)
         print(f"\nCompleted from {start_album} to {end_album}.")
 
