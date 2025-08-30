@@ -2,10 +2,11 @@ import os
 import flickrapi
 import argparse
 import time
+from pathlib import Path
 
 # Flickr API keys (replace with yours from https://www.flickr.com/services/apps/create/)
-API_KEY = "c493447f40149f72909e969c968f897e"
-API_SECRET = "fa4677c1c8c8ceed"
+API_KEY = ""
+API_SECRET = ""
 
 # Name of the token cache file
 TOKEN_CACHE_FILE = "flickr_token"
@@ -133,6 +134,81 @@ def upload_albums(root_path, start_album, end_album, dry_run=False):
     for d in no_develops:
         #print(f"Starting album without develops: {d}")
         upload_directory(d, flickr_albums, dry_run=dry_run)
+        
+def process_local_directories(root_path, start_album, end_album, dry_run=False):
+    # Start at root_path
+    all_dirs = sorted([d for d in os.listdir(root_path) if os.path.isdir(os.path.join(root_path, d))])
+
+    # Get all directories that are between start_album and end_album
+    dirs_in_range = [d for d in all_dirs if start_album <= d <= end_album]
+    print("All directories in range:")
+    for d in dirs_in_range:
+        print(f"  {d}")
+        
+    # Get the list of albums on flickr
+    flickr_albums = get_all_albums()
+    print(f"flickr_albums size: {len(flickr_albums)}")
+    
+    # For each directory in the list, upload the photos
+    for d in dirs_in_range:
+        upload_all_photos_from_directory(os.path.join(root_path, d), flickr_albums, dry_run=dry_run)
+
+def find_jpgs(root_path):
+    """Find all .jpg/.jpeg files under root_path and subdirectories."""
+    jpgs = []
+    for dirpath, _, filenames in os.walk(root_path):
+        for f in filenames:
+            if f.lower().endswith((".jpg", ".jpeg")):
+                jpgs.append(os.path.join(dirpath, f))
+    return sorted(jpgs)
+
+def upload_all_photos_from_directory(dirpath, flickr_albums, dry_run=True, skip_if_album_exists=True):
+    print(f"\nWorking on {dirpath}")
+    album_name = os.path.basename(dirpath)
+    if skip_if_album_exists and any(album['title']['_content'] == album_name for album in flickr_albums):
+        print(f"Skipping {album_name}, album already exists on Flickr.")
+        return
+
+    #files = list(Path(dirpath).rglob("*.[jJ][pP][gG]"))
+    files = find_jpgs(dirpath)
+
+    if not files:
+        print(f"No photos found in {dirpath}")
+    else:
+        print(f"Uploading {len(files)} files from: {dirpath}")
+        first_file = files[0]
+        #filepath = os.path.join(dirpath, first_file)
+
+        if dry_run:
+            print(f"[Dry-run] Would upload first photo: {first_file}")
+            first_photo_id = f"dryrun_{first_file}"
+            print(f"[Dry-run] Would create album '{album_name}' with first photo")
+            album_id = f"dryrun_album_{album_name}"
+        else:
+            print(f"Uploading first file {first_file}")
+            first_photo_id = upload_photo(first_file, os.path.basename(first_file))
+            album_id = get_or_create_album(album_name, first_photo_id)
+
+        # Now upload the rest and add them to the album as we go
+        for file in files[1:]:
+            #filepath = os.path.join(dirpath, file)
+            if dry_run:
+                print(f"[Dry-run] Would upload photo: {file} and add to album '{album_name}'")
+            else:
+                print(f"{os.path.basename(file)}, ", end="", flush=True)
+                photo_id = upload_photo(file, os.path.basename(file))
+                try:
+                    flickr.photosets.addPhoto(
+                        format="parsed-json", photoset_id=album_id, photo_id=photo_id
+                    )
+                except Exception as e:
+                    # Ignore if photo already exists in album
+                    if "Photo already in set" not in str(e):
+                        print(f"Error adding {file} to album: {e}")
+
+        print(f"\nAdded {len(files)} photos to album: {album_name}")
+    
+  
 
  # TODO: Change get_or_create_album to just create. If we're uploading, it shouldn't be there yet.
 def upload_directory(dirpath, flickr_albums, subdir_name=False, dry_run=True, skip_if_album_exists=True):
@@ -204,6 +280,7 @@ if __name__ == "__main__":
         authenticate_write()
         user = flickr.test.login(format='parsed-json')
         print("Authenticated as:", user['user']['username']['_content'])
-        upload_albums(root_folder, start_album, end_album, dry_run=args.dry_run)
+        #upload_albums(root_folder, start_album, end_album, dry_run=args.dry_run)
+        process_local_directories(root_folder, start_album, end_album, dry_run=args.dry_run)
         print(f"\nCompleted from {start_album} to {end_album}.")
 
