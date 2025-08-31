@@ -2,11 +2,12 @@ import os
 import flickrapi
 import argparse
 import time
+from commonutils import get_all_albums
 from pathlib import Path
 
 # Flickr API keys (replace with yours from https://www.flickr.com/services/apps/create/)
-API_KEY = ""
-API_SECRET = ""
+API_KEY = "c493447f40149f72909e969c968f897e"
+API_SECRET = "fa4677c1c8c8ceed"
 
 # Name of the token cache file
 TOKEN_CACHE_FILE = "flickr_token"
@@ -24,20 +25,20 @@ def authenticate_write():
         verifier = input("Enter the verifier code: ")
         flickr.get_access_token(verifier)
 
-def get_all_albums():
-    albums = []
-    page = 1
-    while True:
-        rsp = flickr.photosets.getList(format='parsed-json', per_page=500, page=page)
-        albums.extend(rsp['photosets']['photoset'])
-        if page >= rsp['photosets']['pages']:
-            break
-        page += 1
-    return albums
+# def get_all_albums():
+#     albums = []
+#     page = 1
+#     while True:
+#         rsp = flickr.photosets.getList(format='parsed-json', per_page=500, page=page)
+#         albums.extend(rsp['photosets']['photoset'])
+#         if page >= rsp['photosets']['pages']:
+#             break
+#         page += 1
+#     return albums
 
 def get_or_create_album(title, primary_photo_id=None):
     """Find an album by title or create it if it doesn't exist."""
-    albums = get_all_albums()
+    albums = get_all_albums(flickr)
     for album in albums:
         if album['title']['_content'] == title:
             return album['id']
@@ -118,7 +119,7 @@ def upload_albums(root_path, start_album, end_album, dry_run=False):
         print(f"  {d}")
 
     # Get the list of albums on flickr
-    flickr_albums = get_all_albums()
+    flickr_albums = get_all_albums(flickr)
     print(f"flickr_albums size: {len(flickr_albums)}")
     
     # Prompt asking if want to upload no_develops list
@@ -146,7 +147,7 @@ def process_local_directories(root_path, start_album, end_album, dry_run=False):
         print(f"  {d}")
         
     # Get the list of albums on flickr
-    flickr_albums = get_all_albums()
+    flickr_albums = get_all_albums(flickr)
     print(f"flickr_albums size: {len(flickr_albums)}")
     
     # For each directory in the list, upload the photos
